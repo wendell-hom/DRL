@@ -52,10 +52,16 @@ def main():
         # accurate_motor_model_enabled=True,
         # motor_overheat_protection=True,
         # hard_reset=False,
-        env_randomizer=randomizer,
+        #senv_randomizer=randomizer,
     )
 
-    model = PPO("MlpPolicy", environment, verbose=1)
+	# Training parameters from stable-baselines3-zoo
+    # We are not using make_vec_env, so don't have a place for n_envs and normalize
+    # I think those two settings are for make_vec_env
+    model = PPO("MlpPolicy", environment, verbose=1, n_steps=2048, 
+                batch_size=64, gae_lambda=0.95, gamma=0.99, n_epochs=10, ent_coef=0.0, 
+                learning_rate=2.5e-4, clip_range=0.2)
+    model.learn(total_timesteps=2e6)
 
     observation = environment.reset()
     print(observation)

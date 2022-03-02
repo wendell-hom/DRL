@@ -6,6 +6,7 @@ from __future__ import print_function
 import functools
 import random
 import abc
+import tensorflow.compat.v1 as tf
 
 import os, inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -64,7 +65,7 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
         env: A minitaur gym environment.
         """
         self._randomization_function_dict = self._build_randomization_function_dict(env)
-        for param_name, random_range in self._randomization_param_dict.items():
+        for param_name, random_range in iter(self._randomization_param_dict.items()):
             self._randomization_function_dict[param_name](lower_bound=random_range[0],
                                                         upper_bound=random_range[1])
 
