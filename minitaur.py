@@ -13,6 +13,7 @@ from pybullet_envs.minitaur.envs import minitaur_gym_env
 # from pybullet_envs.minitaur.envs import minitaur_gym_env
 from env_randomizer import MinitaurEnvRandomizer
 
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3 import PPO
 
 log_path = './logs'
@@ -52,8 +53,18 @@ def main():
         # accurate_motor_model_enabled=True,
         # motor_overheat_protection=True,
         # hard_reset=False,
-        #senv_randomizer=randomizer,
+        #env_randomizer=randomizer,
     )
+
+    # Where to save the model
+    output_dir = "models"
+
+    save_path = os.path.join(output_dir, "model.zip")
+    if not os.path.exists(output_dir):
+      os.makedirs(output_dir)
+    callbacks = []
+    callbacks.append(CheckpointCallback(save_freq=1e5, save_path=output_dir,
+                                          name_prefix='model'))
 
 	# Training parameters from stable-baselines3-zoo
     # We are not using make_vec_env, so don't have a place for n_envs and normalize
@@ -61,7 +72,7 @@ def main():
     model = PPO("MlpPolicy", environment, verbose=1, n_steps=2048, 
                 batch_size=64, gae_lambda=0.95, gamma=0.99, n_epochs=10, ent_coef=0.0, 
                 learning_rate=2.5e-4, clip_range=0.2)
-    model.learn(total_timesteps=2e6)
+    model.learn(total_timesteps=2e6, callback=callbacks)
 
     observation = environment.reset()
     print(observation)
