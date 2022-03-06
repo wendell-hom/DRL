@@ -6,10 +6,10 @@ from __future__ import print_function
 import functools
 import random
 import abc
-import tensorflow.compat.v1 as tf
+
 
 import os, inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+currentdir = os.getcwd() #os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(os.path.dirname(currentdir))
 parentdir = os.path.dirname(os.path.dirname(parentdir))
 os.sys.path.insert(0, parentdir)
@@ -98,7 +98,6 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
         random_base_ratio = random.uniform(lower_bound, upper_bound)
         randomized_base_mass = random_base_ratio * np.array(base_mass)
         minitaur.SetBaseMasses(randomized_base_mass)
-        tf.logging.info("base mass is: {}".format(randomized_base_mass))
 
         leg_masses = minitaur.GetLegMassesFromURDF()
         random_leg_ratio = random.uniform(lower_bound, upper_bound)
