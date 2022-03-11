@@ -22,6 +22,7 @@ PARAM_RANGE = {
     "mass": [0.8, 1.2],
     "inertia": [0.5, 1.5],
     "motor strength": [0.8, 1.2],
+
     # The following ranges are the physical values, in SI unit.
     "motor friction": [0, 0.05],  # Viscous damping (Nm s/rad).
     "control step": [0.003, 0.02],  # Time inteval (s).
@@ -64,6 +65,7 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
         Args:
         env: A minitaur gym environment.
         """
+        print("Randomizing the ENV")
         self._randomization_function_dict = self._build_randomization_function_dict(env)
         for param_name, random_range in iter(self._randomization_param_dict.items()):
             self._randomization_function_dict[param_name](lower_bound=random_range[0],
@@ -145,3 +147,31 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
                                                             [upper_bound] * minitaur.num_motors)
         minitaur.SetMotorStrengthRatios(randomized_motor_strength_ratios)
     
+
+class StaticEnvRandomizer(MinitaurEnvRandomizer):
+    def __init__(self):
+        self._randomization_param_dict = all_params()
+        self.step = 0
+    def randomize_env(self, env):
+        if self.step == 0:
+            self._randomization_function_dict = self._build_randomization_function_dict(env)
+            for param_name, random_range in iter(self._randomization_param_dict.items()):
+                self._randomization_function_dict[param_name](lower_bound=random_range[0],
+                                                            upper_bound=random_range[1])
+            self.step += 1
+    def randomize_step(self, env):
+        pass
+
+class BayesianEnvRandomizer(MinitaurEnvRandomizer):
+    def __init__(self):       
+        self._randomization_param_dict = all_params()
+    
+    def randomize_env(self, env):
+        if self.step == 0:
+            self._randomization_function_dict = self._build_randomization_function_dict(env)
+            for param_name, random_range in iter(self._randomization_param_dict.items()):
+                self._randomization_function_dict[param_name](lower_bound=random_range[0],
+                                                            upper_bound=random_range[1])
+
+    def randomize_step(self, env):
+        pass
