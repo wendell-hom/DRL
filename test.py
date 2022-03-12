@@ -10,10 +10,11 @@ import os
 import numpy as np
 
 from pybullet_envs.minitaur.envs import minitaur_extended_env
+from env import MinitaurExtendedEnv
 from pybullet_envs.minitaur.envs import minitaur_gym_env
 #from pybullet_envs.bullet import minitaur_gym_env
 from pybullet_envs.bullet import minitaur_env_randomizer
-from env_randomizer import MinitaurEnvRandomizer
+from env_randomizer import MinitaurEnvRandomizer, StaticEnvRandomizer
 
 from stable_baselines3 import PPO
 
@@ -35,37 +36,37 @@ def main():
     model_file = args.model
     render = args.render
 
-
+    
     if randomize:
         randomizer = MinitaurEnvRandomizer('all_params')
 
-        environment = minitaur_extended_env.MinitaurExtendedEnv(
-          history_length=1,
-          history_include_actions=True,
-          history_include_states=False,
-          include_state_difference=False,
-          include_second_state_difference=False,
-          include_base_position=False,
-          include_leg_model=False,
-          never_terminate=True,
-          action_scale=0.5,
-          urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
-          env_randomizer=randomizer,
-          render=render,
+        environment = MinitaurExtendedEnv(
+            history_length=1,
+            history_include_actions=True,
+            history_include_states=False,
+            include_state_difference=False,
+            include_second_state_difference=False,
+            include_base_position=False,
+            include_leg_model=False,
+            never_terminate=True,
+            action_scale=0.5,
+            urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
+            env_randomizer=randomizer,
+            render=render,
         )
     else:
-        environment = minitaur_extended_env.MinitaurExtendedEnv(
-          history_length=1,
-          history_include_actions=True,
-          history_include_states=False,
-          include_state_difference=False,
-          include_second_state_difference=False,
-          include_base_position=False,
-          include_leg_model=False,
-          never_terminate=True,
-          action_scale=0.5,
-          urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
-          render=render,
+        environment = MinitaurExtendedEnv(
+            history_length=1,
+            history_include_actions=True,
+            history_include_states=False,
+            include_state_difference=False,
+            include_second_state_difference=False,
+            include_base_position=False,
+            include_leg_model=False,
+            never_terminate=True,
+            action_scale=0.5,
+            urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
+            render=render,
         )
 
 
@@ -105,7 +106,7 @@ def main():
         rewards.append(sum_reward)
         fallen.append(has_fallen)
 
-    print("Average reward:", np.mean(sum_reward))
+    print("Average reward:", np.mean(rewards))
     print("Times fallen:", np.sum(fallen))
 
 if __name__ == "__main__":
