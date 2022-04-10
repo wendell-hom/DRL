@@ -19,9 +19,6 @@ from stable_baselines3 import PPO
 log_path = './logs'
 
 def main():
-    steps = 1000
-    episodes = 5
-
     randomizer = MinitaurEnvRandomizer('all_params')
   
     environment = MinitaurExtendedEnv(

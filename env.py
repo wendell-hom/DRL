@@ -426,12 +426,12 @@ class MinitaurExtendedEnv(MinitaurReactiveEnv):
         # motor_angles = motor_angles / (np.pi / 4.)
         leg_angles = np.zeros(num_legs * 2)
         for i in range(num_legs):
-        motor1, motor2 = motor_angles[2 * i:2 * i + 2]
-        swing = (-1)**(i // 2) * 0.5 * (motor2 - motor1)
-        extension = 0.5 * (motor1 + motor2)
+            motor1, motor2 = motor_angles[2 * i:2 * i + 2]
+            swing = (-1)**(i // 2) * 0.5 * (motor2 - motor1)
+            extension = 0.5 * (motor1 + motor2)
 
-        leg_angles[i] = swing
-        leg_angles[i + num_legs] = extension
+            leg_angles[i] = swing
+            leg_angles[i + num_legs] = extension
 
         return leg_angles
 
