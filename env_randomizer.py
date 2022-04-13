@@ -9,6 +9,8 @@ import abc
 
 
 import os, inspect
+
+from spm.SPM import SimParamModel
 currentdir = os.getcwd() #os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(os.path.dirname(currentdir))
 parentdir = os.path.dirname(os.path.dirname(parentdir))
@@ -59,7 +61,7 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
             config = all_params
         except AttributeError:
             raise ValueError("Config {} is not found.".format(config))
-        self._randomization_param_dict = config()
+        self.randomization_param_dict = config()
     
     def randomize_env(self, env):
         """Randomize various physical properties of the environment.
@@ -67,10 +69,9 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
         Args:
         env: A minitaur gym environment.
         """
-        print("Randomizing the ENV")
         param_dict = {}
         self._randomization_function_dict = self._build_randomization_function_dict(env)
-        for param_name, random_range in iter(self._randomization_param_dict.items()):
+        for param_name, random_range in iter(self.randomization_param_dict.items()):
             param_dict[param_name] = self._randomization_function_dict[param_name](lower_bound=random_range[0],
                                                         upper_bound=random_range[1])
         return param_dict
@@ -168,12 +169,12 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
 
 class StaticEnvRandomizer(MinitaurEnvRandomizer):
     def __init__(self):
-        self._randomization_param_dict = all_params()
+        self.randomization_param_dict = all_params()
         self.step = 0
     def randomize_env(self, env):
         if self.step == 0:
             self._randomization_function_dict = self._build_randomization_function_dict(env)
-            for param_name, random_range in iter(self._randomization_param_dict.items()):
+            for param_name, random_range in iter(self.randomization_param_dict.items()):
                 self._randomization_function_dict[param_name](lower_bound=random_range[0],
                                                             upper_bound=random_range[1])
             self.step += 1
@@ -182,28 +183,52 @@ class StaticEnvRandomizer(MinitaurEnvRandomizer):
 
 
 
-class SimOpt(MinitaurEnvRandomizer):
-    def __init__(self):
-        self._randomization_param_dict = all_params()
-        self.SPM = None
+import torch
+
+class SimPramRandomizer(MinitaurEnvRandomizer):
+    def __init__(self, env, model, batch_size):
+        self.randomization_param_dict = all_params()
+        self.randomize_env(env)
+
+        param_shape, param_elems = self.get_params()
+
+        self.SPM = SimParamModel(shape=len(param_elems), action_space=env.action_space, layers=2,units=400, device=torch.device('cuda'), obs_shape=model.rollout_buffer.obs_shape, 
+            encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size )
+                
+        self.SPM.train_classifier(None , param_elems, self.distribution_mean)
+        
 
 
+    def randomize_env(self, env):    
+        self.param_dict = super(SimPramRandomizer, self).randomize_env(env)
 
-    def randomzie_env(self, env):
-         pass
+    def randomize_step(self, env):
+        pass
 
-        #func_dict["mass"] = functools.partial(self._randomize_masses, minitaur=env.minitaur)
-        #func_dict["inertia"] = functools.partial(self._randomize_inertia, minitaur=env.minitaur)
-        #func_dict["latency"] = functools.partial(self._randomize_latency, minitaur=env.minitaur)
-        #func_dict["joint friction"] = functools.partial(self._randomize_joint_friction,
-        #                                                minitaur=env.minitaur)
-        #func_dict["motor friction"] = functools.partial(self._randomize_motor_friction,
-        #                                                minitaur=env.minitaur)
-        #func_dict["restitution"] = functools.partial(self._randomize_contact_restitution,
-        #                                            minitaur=env.minitaur)
-        #func_dict["lateral friction"] = functools.partial(self._randomize_contact_friction,
-        #                                                minitaur=env.minitaur)
-        #func_dict["battery"] = functools.partial(self._randomize_battery_level, minitaur=env.minitaur)
-        #func_dict["motor strength"] = pass
-        ## Settinmg control step needs access to the environment.
-        #func_dict["control step"] = pass
+    @property
+    def distribution_mean(self):
+        param_mean_elems = {}
+        for param_name, elem in self.randomization_param_dict.items():
+            param_mean_elems[param_name] = (elem[0] + elem[1]) / 2
+        return param_mean_elems
+
+    def set_param_distribution(self, elem_classification):
+        param_mean_elems = self.distribution_mean
+        for i, (param_name, elem) in enumerate(self.randomization_param_dict.items()):
+            idx = elem_classification[i]
+            self.randomization_param_dict[param_name][idx] = param_mean_elems[param_name]
+        return param_mean_elems
+
+    def get_params(self):
+        param_shape = {}
+        param_elem = []
+        for param_name, param_obj in self.param_dict.items():
+            if isinstance(param_obj, np.ndarray):
+                param_shape[param_name] = param_obj.shape
+                param_dict[param_name] = param_obj.flatten()
+                param_elem += param_obj.flatten().tolist()
+            else:
+                param_shape[param_name] = 1
+                param_elem.append(param_obj)
+
+        return param_elem, param_shape
