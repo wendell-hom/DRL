@@ -236,12 +236,12 @@ class MinitaurExtendedEnv(MinitaurReactiveEnv):
     def __init__(self,
                 history_length=1,
                 history_include_actions=True,
-                history_include_states=False,
-                include_state_difference=False,
-                include_second_state_difference=False,
-                include_base_position=False,
-                include_leg_model=False,
-                never_terminate=False,
+                history_include_states=True,
+                include_state_difference=True,
+                include_second_state_difference=True,
+                include_base_position=True,
+                include_leg_model=True,
+                never_terminate=True,
                 action_scale=0.5,
                 **kwargs):
         self._kwargs = kwargs

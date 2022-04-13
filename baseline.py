@@ -39,7 +39,7 @@ def main():
     # Where to save the model
     output_dir = "models"
 
-    save_path = os.path.join(output_dir, "model.zip")
+    save_path = os.path.join(output_dir, "model")
     if not os.path.exists(output_dir):
       os.makedirs(output_dir)
     callbacks = []
