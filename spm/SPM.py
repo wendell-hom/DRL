@@ -312,14 +312,14 @@ class SimParamModel(nn.Module):
                     encoder_type, obs_shape, encoder_feature_dim, encoder_num_layers,
                     encoder_num_filters, output_logits=True, use_layer_norm=self.use_layer_norm,
                     spatial_softmax=spatial_softmax,
-                )
+                ).to(self.device)
             else:
                 obs_shape = (3 * self.num_frames, h, w)
                 self.encoder = make_encoder(
                     encoder_type, obs_shape, encoder_feature_dim, encoder_num_layers,
                     encoder_num_filters, output_logits=True, use_layer_norm=self.use_layer_norm,
                     spatial_softmax=spatial_softmax,
-                )
+                ).to(self.device)
 
         if self.use_weight_init:
             self.apply(weight_init)
@@ -354,17 +354,16 @@ class SimParamModel(nn.Module):
 
     def forward(self, full_traj):
         """ obs traj list of lists, pred labels is array [B, num_sim_params] """
-        # Turn np arrays into tensors
-        if type(full_traj[0][0][0]) is np.ndarray:
-            full_traj = [[(torch.FloatTensor(o).to(self.device),
-                           torch.FloatTensor(s).to(self.device),
-                           torch.FloatTensor(a).to(self.device))
-                          for o, s, a in traj]
-                         for traj in full_traj]
+        # Turn np arrays into tensors   
+        
 
-        full_obs_traj = []
+        if type(full_traj[0][0][0]) is np.ndarray:
+            full_traj = [[ (torch.FloatTensor(o).to(self.device),  torch.FloatTensor(s).to(self.device), torch.FloatTensor(a).to(self.device)) for o, s, a in traj]  for traj in full_traj]
+
         full_state_traj = []
         full_action_traj = []
+        full_obs_traj = []
+
         for traj in full_traj:
             # TODO: previously, we were always taking the first window.  Now, we always take a random one.
             #   We could consider choosing multiple, or choosing a separate segmentation for each batch element.
@@ -440,7 +439,8 @@ class SimParamModel(nn.Module):
                 full_obs_traj.append(obs_traj)
 
         # normalize [-1, 1]
-        pred_labels = pred_labels.to(self.device)
+
+        pred_labels = torch.FloatTensor(pred_labels).to(self.device)
 
         encoded_pred_labels = self.positional_encoding(pred_labels)
         full_action_traj = torch.stack(full_action_traj)
@@ -451,10 +451,12 @@ class SimParamModel(nn.Module):
 
         if self.use_img:
             feat = self.get_features(full_obs_traj)
-            fake_pred = torch.cat([encoded_pred_labels.repeat(B_traj, 1),
-                                   feat.repeat(B_label, 1),
-                                   full_action_traj.repeat(B_label, 1),
-                                   full_state_traj.repeat(B_label, 1)], dim=-1)
+            h1 = encoded_pred_labels.repeat(B_traj, 1)
+            h2 = feat.repeat(B_label, 1)
+            h3 = full_action_traj.repeat(B_label, 1)
+            h4 = full_state_traj.repeat(B_label, 1)
+            print(h1.shape, h2.shape, h3.shape, h4.shape)
+            fake_pred = torch.cat([h1, h2, h3, h4], dim=-1)
         else:
             fake_pred = torch.cat([encoded_pred_labels.repeat(B_traj, 1),
                                    full_action_traj.repeat(B_label, 1),
@@ -516,76 +518,18 @@ class SimParamModel(nn.Module):
         return loss, (full_loss, accuracy, error, self.feature_norm.detach().cpu().numpy())
 
 
-    def update(self, obs_list, sim_params, dist_mean, L, step, replay_buffer=None, val=False, tag="train"):
-        total_num_trajs = 16
-        if replay_buffer is not None:
-            if self.encoder_type == 'pixel':
-                obs_list, actions_list, rewards_list, next_obses_list, not_dones_list, cpc_kwargs_list = replay_buffer.sample_cpc_traj(
-                    total_num_trajs, val=val)
-            else:
-                obs_list, actions_list, rewards_list, next_obses_list, not_dones_list = replay_buffer.sample_proprio_traj(
-                    total_num_trajs, val=val)
-
+    def update(self, obs_list, sim_params, dist_mean):
         if self._dist == 'normal':
-
-            if replay_buffer is None:
-                loss = torch.nn.MSELoss()(self.forward([obs_list]), torch.FloatTensor(sim_params).to(self.device))
-            else:
-                losses = []
-                for obs_traj, action_traj in zip(obs_list, actions_list):
-                    pred_sim_params = self.forward([list(zip(obs_traj['image'], obs_traj['state'], action_traj))])
-                    actual_params = obs_traj['sim_params'][-1]  # take last obs
-                    loss = torch.nn.MSELoss()(pred_sim_params, actual_params)
-
-                    losses.append(loss)
-                loss = sum(losses)
-
+            loss = torch.nn.MSELoss()(self.forward([obs_list]), torch.FloatTensor(sim_params).to(self.device))
+            self.sim_param_optimizer.zero_grad()
+            loss.backward()
+            print("loss", loss.cpu().item())
+            self.sim_param_optimizer.step()
+        else:
+            loss, log_params = self.train_classifier(obs_list, sim_params, dist_mean)
             self.sim_param_optimizer.zero_grad()
             loss.backward()
             self.sim_param_optimizer.step()
-        else:
-            if val:
-                with torch.no_grad():
-                    for obs_traj, action_traj in zip(obs_list, actions_list):
-                        if self.encoder_type == 'pixel':
-                            loss, log_params = self.train_classifier(
-                                list(zip(obs_traj['image'], action_traj)),
-                                obs_traj['sim_params'][-1].to('cpu'),
-                                obs_traj['distribution_mean'][-1].to('cpu'))
-                        else:
-                            loss, log_params = self.train_classifier(
-                                list(zip(obs_traj['state'], action_traj)),
-                                obs_traj['sim_params'][-1].to('cpu'),
-                                obs_traj['distribution_mean'][-1].to('cpu'))
-            else:
-                if replay_buffer is None:
-                    loss, log_params = self.train_classifier(obs_list, sim_params, dist_mean)
-                else:
-                    losses = []
-                    loss_vectors = []
-                    accuracy_vectors = []
-                    error_vectors = []
-                    norm_vectors = []
-                    for obs_traj, action_traj in zip(obs_list, actions_list):
-                        if self.encoder_type == 'pixel':
-                            loss, (full_loss, accuracy, error, norm) = self.train_classifier(
-                                list(zip(obs_traj['image'], obs_traj['state'], action_traj)),
-                                obs_traj['sim_params'][-1].to('cpu'),
-                                obs_traj['distribution_mean'][-1].to('cpu'))
-                        else:
-                            loss, (full_loss, accuracy, error, norm) = self.train_classifier(
-                                list(zip(obs_traj['state'], obs_traj['state'], action_traj)),  # TODO: do something better here!
-                                obs_traj['sim_params'][-1].to('cpu'),
-                                obs_traj['distribution_mean'][-1].to('cpu'))
-                        losses.append(loss)
-                        loss_vectors.append(full_loss)
-                        accuracy_vectors.append(accuracy)
-                        error_vectors.append(error)
-                        norm_vectors.append(norm)
-                    loss = sum(losses)
-                self.sim_param_optimizer.zero_grad()
-                loss.backward()
-                self.sim_param_optimizer.step()
 
     def save(self, model_dir, step):
         torch.save(
@@ -602,6 +546,7 @@ class SimParamModel(nn.Module):
         self.sim_param_optimizer.load_state_dict(
             torch.load('%s/sim_param_optimizer_%s.pt' % (model_dir, step))
         )
+
 
 
 def predict_sim_params(sim_param_model, traj, current_sim_params, step=10, confidence_level=.3):

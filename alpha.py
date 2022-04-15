@@ -31,8 +31,7 @@ def get_frame_captures(env, actions):
         next_obs, _, _, _ = env.step(act)
         obs.append(next_obs)
         frames.append(env.render())
-
-    return np.asarray(obs), np.asarray(frames)
+    return np.asarray(frames)
 
 def main_1():
 
@@ -130,14 +129,8 @@ def main_1():
 
     # FOR 1: K
     for _ in range(10):
-        # train ppo
         model.learn(total_timesteps=1e2, callback=callbacks)
-    
-        actions = model.rollout_buffer.actions
-        observations, frames = get_frame_captures(sim_environment, actions)
-        model_observations = model.rollout_buffer.observations
-        model.rollout_buffer
-
+        sim_param_model.spm_train()
 
     # model.learn(total_timesteps=2e6, callback=callbacks, eval_env=real_environment)
 

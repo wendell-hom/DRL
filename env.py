@@ -15,33 +15,6 @@ MinitaurPose = collections.namedtuple(
     "extension_angle_1, extension_angle_2, extension_angle_3, "
     "extension_angle_4")
 
-def get_camera():
-    width = 128
-    height = 128
-
-    fov = 60
-    aspect = width / height
-    near = 0.02
-    far = 1
-
-    view_matrix = pb.computeViewMatrix([0, 0, 0.5], [0, 0, 0], [1, 0, 0])
-    projection_matrix = pb.computeProjectionMatrixFOV(fov, aspect, near, far)
-
-    # Get depth values using the OpenGL renderer
-    images = pb.getCameraImage(width,
-                            height,
-                            view_matrix,
-                            projection_matrix,
-                            shadow=True,
-                            renderer=pb.ER_BULLET_HARDWARE_OPENGL)
-    # NOTE: the ordering of height and width change based on the conversion
-    rgb_opengl = np.reshape(images[2], (height, width, 4)) * 1. / 255.
-    depth_buffer_opengl = np.reshape(images[3], [width, height])
-    depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
-    seg_opengl = np.reshape(images[4], [width, height]) * 1. / 255.
-
-    return (rgb_opengl, depth_opengl, seg_opengl)
-
 
 class MinitaurReactiveEnv(minitaur_gym_env.MinitaurGymEnv):
     """The gym environment for the minitaur.
@@ -53,7 +26,7 @@ class MinitaurReactiveEnv(minitaur_gym_env.MinitaurGymEnv):
     expenditure.
 
     """
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 166}
+    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 60}
 
     def __init__(self,
                 urdf_version=None,
@@ -230,7 +203,7 @@ class MinitaurExtendedEnv(MinitaurReactiveEnv):
 
     metadata = {
         "render.modes": ["human", "rgb_array"],
-        "video.frames_per_second": 50,
+        "video.frames_per_second": 30,
     }
 
     def __init__(self,

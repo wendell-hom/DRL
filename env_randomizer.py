@@ -6,9 +6,11 @@ from __future__ import print_function
 import functools
 import random
 import abc
-
-
 import os, inspect
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
+import torch
 
 from spm.SPM import SimParamModel
 currentdir = os.getcwd() #os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -181,23 +183,57 @@ class StaticEnvRandomizer(MinitaurEnvRandomizer):
     def randomize_step(self, env):
         pass
 
+def crop_center(img,cropx,cropy):
+    y,x,c = img.shape
+    startx = x//2-(cropx//2)
+    starty = y//2-(cropy//2)    
+    return img[starty:starty+cropy,startx:startx+cropx, :]
+    
+def get_frame_captures(env, actions):
+    obs = []
+    frames = []
+    env.reset()
+    for act in actions:
+        next_obs, _, _, _ = env.step(act)
+        obs.append(next_obs)
+        frames.append(env.render())
+        # imgplot = plt.imshow(frames[-1])
+        # plt.show()
+    frames = np.asarray(frames)
+    frames = np.transpose(frames, (0, 3, 1, 2))
+    return frames, obs
 
-
-import torch
 
 class SimPramRandomizer(MinitaurEnvRandomizer):
     def __init__(self, env, model, batch_size):
         self.randomization_param_dict = all_params()
         self.randomize_env(env)
-
-        param_shape, param_elems = self.get_params()
-
-        self.SPM = SimParamModel(shape=len(param_elems), action_space=env.action_space, layers=2,units=400, device=torch.device('cuda'), obs_shape=model.rollout_buffer.obs_shape, 
-            encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size )
-                
-        self.SPM.train_classifier(None , param_elems, self.distribution_mean)
+        self.env = env
+        self.model = model
+        param_elems, param_shape = self.get_params()
+        frame, obs = get_frame_captures(env, env.action_space.sample())
+       
         
+        self.SPM = SimParamModel(shape=len(param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=2, units=400, device=torch.device('cuda'), obs_shape=frame[0].shape, 
+            encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size )
 
+    def spm_train(self):
+        param_elems, param_shape = self.get_params()
+        actions = self.model.rollout_buffer.actions
+        frames, obs = get_frame_captures(self.env, actions)
+
+        x = []
+        for i in range(len(frames)):
+            x.append([frames[i], obs[i], actions[i]])
+
+        self.SPM.update(x, param_elems, self.distribution_mean)
+
+        with torch.no_grad():
+            pred = self.SPM.forward_classifier([x], param_elems).cpu().numpy()
+            mask = (pred > 0.3) & (pred < 1-0.3)
+            preds = np.round(pred)
+            confidence_pred = np.mean(preds, axis=0)
+        print(confidence_pred)
 
     def randomize_env(self, env):    
         self.param_dict = super(SimPramRandomizer, self).randomize_env(env)
@@ -225,7 +261,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         for param_name, param_obj in self.param_dict.items():
             if isinstance(param_obj, np.ndarray):
                 param_shape[param_name] = param_obj.shape
-                param_dict[param_name] = param_obj.flatten()
+                self.param_dict[param_name] = param_obj.flatten()
                 param_elem += param_obj.flatten().tolist()
             else:
                 param_shape[param_name] = 1
