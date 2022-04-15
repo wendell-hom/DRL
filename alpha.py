@@ -126,7 +126,7 @@ def main_1():
 
     sim_param_model = SimPramRandomizer(sim_environment, model, batch_size)
     sim_environment.add_env_randomizer(sim_param_model)
-
+    
     # FOR 1: K
     for _ in range(10):
         model.learn(total_timesteps=1e2, callback=callbacks)

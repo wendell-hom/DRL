@@ -231,7 +231,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         with torch.no_grad():
             pred = self.SPM.forward_classifier([x], param_elems).cpu().numpy()
             mask = (pred > 0.3) & (pred < 1-0.3)
-            preds = np.round(pred)
+            preds = np.round(pred[mask])
             confidence_pred = np.mean(preds, axis=0)
         print(confidence_pred)
 
