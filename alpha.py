@@ -33,26 +33,26 @@ def get_frame_captures(env, actions):
         frames.append(env.render())
     return np.asarray(frames)
 
+
+
 def main_1():
 
-    static_env_randomizer = StaticEnvRandomizer()
-    dynamic_env_randomizer = MinitaurEnvRandomizer()
+    static_environment_randomizer = StaticEnvRandomizer()
+    real_environment = MinitaurExtendedEnv(
+         history_length=1,
+          history_include_actions=True,
+          history_include_states=True,
+          include_state_difference=True,
+          include_second_state_difference=True,
+          include_base_position=True,
+          include_leg_model=True,
+          never_terminate=False,
+          action_scale=0.5,
+          urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
+          env_randomizer=static_environment_randomizer,
+         render=False,
+    )
     
-
-    # real_enviornment = MinitaurExtendedEnv(
-    #       history_length=1,
-    #       history_include_actions=True,
-    #       history_include_states=True,
-    #       include_state_difference=True,
-    #       include_second_state_difference=True,
-    #       include_base_position=True,
-    #       include_leg_model=True,
-    #       never_terminate=True,
-    #       action_scale=0.5,
-    #       urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
-    #       render=False,
-    #       env_randomizer=static_env_randomizer,
-    # )
 
     sim_environment = MinitaurExtendedEnv(
          history_length=1,
@@ -65,50 +65,11 @@ def main_1():
           never_terminate=False,
           action_scale=0.5,
           urdf_version=minitaur_gym_env.DERPY_V0_URDF_VERSION,
-          render=False,
-          
+        render=False,
     )
+    
 
 
-
-
-    # #warmup
-    # warmup_buffer = []
-    # # SPM.SimParamModel(None, None)
-    # sim_enviornment.add_env_randomizer(dynamic_env_randomizer)
-
-    # for i in range(1):
-    #     param_dict = dynamic_env_randomizer.randomize_env(sim_enviornment)
-
-    #     for param_model, param_obj in param_dict.items():
-    #         print(param_model, param_obj)
-    #     param_shape = {}
-    #     param_elem = []
-    #     for param_name, param_obj in param_dict.items():
-    #         if isinstance(param_obj, np.ndarray):
-    #             param_shape[param_name] = param_obj.shape
-    #             param_dict[param_name] = param_obj.flatten()
-    #             param_elem += param_obj.flatten().tolist()
-    #         else:
-    #             param_shape[param_name] = 1
-    #             param_elem.append(param_obj)
-        
-    #     action_space = sim_enviornment.action_space.sample()
-    #     next_obs_space, reward, done, info = sim_enviornment.step(action_space)
-    #     env_img = sim_enviornment.render()
-
-
-
-    #     new_param_dict = {}
-    #     counter = 0
-    #     for param_name, param_s in param_shape.items():
-    #         end_counter = counter + np.prod(param_s)
-    #         new_param_dict[param_name] = param_elem[counter: end_counter]
-    #         counter = end_counter
-
-    #     # SPM goes here
-
-    #     # print(action_space.shape, env_action_obs.shape, env_img.shape, param_elem) 
 
 
     # Where to save the model
@@ -129,12 +90,44 @@ def main_1():
     
     # FOR 1: K
     for _ in range(10):
+        #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
         sim_param_model.spm_train()
+        sim_param_model.update_params(real_environment)
+        # EVALUATE PARAMS AGAINST REAL WORLD OBSERVATIONS
+        # evaluate(real_env, sim_env, agent, sim_param_model, video_real, video_sim,
+        #              args.num_eval_episodes, L, step, args, use_policy, update_distribution, training_phase)
+
+        # collect rollouts using PPO model running on real world env, i.e., collect real world trajectories.
+        # potentially 3 episodes 
+
+        # for each episode, we call update_sim_params to figure which parameters (129) should be updated.
+        # values of 0 from forward_classifier, should be decremented, values of 0.5 leave it alone, values of 1 increment
+
+        # pred_sim_params is a list of 3 items, but we take mean so it becomes a list of len = number of parameters (129)
+        
+        # Loop through all parameters,
+        # figure out current simulation mean value
+        # figure out new updated mean based on 
+        #     scale_factor = max(prev_mean, args.alpha)
+        #     new_update = - alpha * (np.mean(pred_mean) - 0.5) * scale_factor
+        #     curr_update = args.momentum * args.update[i] + (1 - args.momentum) * new_update
+        #     new_mean = prev_mean + curr_update
+        # new_mean = max(new_mean, 1e-3)
+        # sim_env.dr[param] = new_mean
+
+
+        
 
     # model.learn(total_timesteps=2e6, callback=callbacks, eval_env=real_environment)
 
 
 
+
+
+
+
+
 if __name__ == "__main__":
   main_1()
+

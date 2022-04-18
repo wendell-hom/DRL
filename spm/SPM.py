@@ -232,7 +232,7 @@ class SimParamModel(nn.Module):
     def __init__(self, shape, action_space, layers, units, device, obs_shape, encoder_type,
                  encoder_feature_dim, encoder_num_layers, encoder_num_filters, sim_param_lr=1e-3,
                  sim_param_beta=0.9,
-                 dist='normal', act=nn.ELU, batch_size=32, traj_length=200, num_frames=10,
+                 dist='binary', act=nn.ELU, batch_size=32, traj_length=200, num_frames=10,
                  embedding_multires=10, use_img=True, state_dim=0, separate_trunks=False, param_names=[],
                  train_range_scale=1, prop_train_range_scale=False, clip_positive=False, dropout=0.5,
                  initial_range=None, single_window=False, share_encoder=False, normalize_features=False,
@@ -440,9 +440,11 @@ class SimParamModel(nn.Module):
 
         # normalize [-1, 1]
 
-        pred_labels = torch.FloatTensor(pred_labels).to(self.device)
+        if isinstance(pred_labels, np.ndarray) or isinstance(pred_labels, list):
+            pred_labels = torch.FloatTensor(pred_labels).to(self.device)
 
-        encoded_pred_labels = self.positional_encoding(pred_labels)
+
+        encoded_pred_labels = self.positional_encoding(pred_labels)  # 513, 2709 <- 513, 129
         full_action_traj = torch.stack(full_action_traj)
         full_state_traj = torch.stack(full_state_traj)
         B_label = len(pred_labels)
@@ -455,7 +457,6 @@ class SimParamModel(nn.Module):
             h2 = feat.repeat(B_label, 1)
             h3 = full_action_traj.repeat(B_label, 1)
             h4 = full_state_traj.repeat(B_label, 1)
-            print(h1.shape, h2.shape, h3.shape, h4.shape)
             fake_pred = torch.cat([h1, h2, h3, h4], dim=-1)
         else:
             fake_pred = torch.cat([encoded_pred_labels.repeat(B_traj, 1),
@@ -571,9 +572,16 @@ def predict_sim_params(sim_param_model, traj, current_sim_params, step=10, confi
     return confident_preds
 
 
+
+
+
+
+
+
+
+
 def update_sim_params(sim_param_model, sim_env, obs, step, L, real_dr_list, real_dr_params, updates):
     with torch.no_grad():
-    
         current_sim_params = torch.FloatTensor(sim_env.distribution_mean).unsqueeze(0)
         pred_sim_params = []
         if len(obs) > 1:
@@ -593,7 +601,6 @@ def update_sim_params(sim_param_model, sim_env, obs, step, L, real_dr_list, real
             pred_mean = pred_sim_params
         alpha = 0.1
 
-    
         new_update = - alpha * (np.mean(pred_mean) - 0.5)
         new_mean = prev_mean + new_update
         updates.append(new_update)
@@ -608,7 +615,7 @@ def update_sim_params(sim_param_model, sim_env, obs, step, L, real_dr_list, real
         else:
             sim_param_error = new_mean - real_dr_param
         L.log(f'eval/agent-sim_param/{param}/sim_param_error', sim_param_error, step)
-     
+
         # Update range scale, if necessary
         # proportion_through_training = float(step / args.num_train_steps)
         # start = args.anneal_range_scale_start
@@ -619,3 +626,91 @@ def update_sim_params(sim_param_model, sim_env, obs, step, L, real_dr_list, real
         # sim_param_model.train_range_scale = new_range_scale
 
    
+   
+def evaluate(real_env, sim_env, agent, sim_param_model, video_real, video_sim, num_episodes, L, step, args, use_policy,
+             update_distribution, training_phase):
+    
+    def run_eval_loop(sample_stochastically=False):
+
+    
+        prefix = 'stochastic_' if sample_stochastically else ''
+        obs_batch = []
+        real_sim_params = real_env.reset()['sim_params']
+
+        for i in range(num_episodes):
+
+
+            obs_dict = real_env.reset()
+            
+            obs_traj = []
+
+
+            while not done and len(obs_traj) < args.time_limit:
+
+                # Collect trajectories from real_env
+                
+                obs_img = obs_dict['image']
+                # center crop image
+
+                action = agent.select_action(obs_img)
+                obs_traj.append((obs_img, obs_state, action))
+                obs_dict, reward, done, _ = real_env.step(action)
+                video_real.record(real_env)
+                episode_reward += reward
+
+            video_real.save(f'real_{training_phase}_{step}.mp4')
+            if log_reward:
+                L.log('eval/' + prefix + f'episode_reward', episode_reward, step)
+            if 'success' in obs_dict.keys():
+                if log_reward:
+                    L.log('eval/' + prefix + 'episode_success', obs_dict['success'], step)
+                all_ep_success.append(obs_dict['success'])
+            all_ep_rewards.append(episode_reward)
+            obs_batch.append(obs_traj)
+
+
+        if (not args.outer_loop_version == 0) and update_distribution:
+            current_sim_params = torch.FloatTensor([sim_env.distribution_mean])
+            evaluate_sim_params(sim_param_model, args, obs_batch, step, L, "test", real_sim_params,
+                                current_sim_params)
+            update_sim_params(sim_param_model, sim_env, args, obs_batch, step, L)
+
+        filename = args.work_dir + '/eval_scores.npy'
+        key = args.domain_name + '-' + str(args.task_name) + '-' + args.data_augs
+
+        np.save(filename, log_data)
+
+        obs_dict = sim_env.reset()
+        done = False
+        obs_traj_sim = []
+        video_sim.init(enabled=True)
+        video_sim.record(sim_env)
+        while not done and len(obs_traj_sim) < args.time_limit:
+            obs_img = obs_dict['image']
+            # center crop image
+            if (args.agent == 'curl_sac' and args.encoder_type == 'pixel') or (
+                args.agent == 'rad_sac' and (args.encoder_type == 'pixel' or 'crop' in args.data_augs)):
+                obs_img = utils.center_crop_image(obs_img, args.image_size)
+            obs_state = obs_dict['state']
+            with utils.eval_mode(agent):
+                if not use_policy:
+                    action = sim_env.action_space.sample()
+                elif sample_stochastically:
+                    action = agent.sample_action(obs_img)
+                else:
+                    action = agent.select_action(obs_img)
+            obs_traj_sim.append((obs_img, obs_state, action))
+            obs_dict, reward, done, _ = sim_env.step(action)
+
+            video_sim.record(sim_env)
+            sim_params = obs_dict['sim_params']
+        if update_distribution and sim_param_model is not None:
+            current_sim_params = torch.FloatTensor([sim_env.distribution_mean])
+            evaluate_sim_params(sim_param_model, args, [obs_traj_sim], step, L, "val", sim_params, current_sim_params)
+
+        video_sim.save(f'sim_{training_phase}_%d.mp4' % step)
+
+    run_eval_loop(sample_stochastically=True)
+    L.dump(step)
+
+
