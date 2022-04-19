@@ -101,72 +101,72 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
         func_dict["control step"] = functools.partial(self._randomize_control_step, env=env)
         return func_dict
 
-    def _randomize_control_step(self, env, lower_bound, upper_bound):
-        randomized_control_step = np.random.uniform(lower_bound, upper_bound)
+    def _randomize_control_step(self, env, lower_bound, upper_bound): # float
+        randomized_control_step = random.uniform(lower_bound, upper_bound)
         env.set_time_step(randomized_control_step)
         return randomized_control_step
 
-    def _randomize_masses(self, minitaur, lower_bound, upper_bound):
+    def _randomize_masses(self, minitaur, lower_bound, upper_bound): # array
         base_mass = minitaur.GetBaseMassesFromURDF()
         random_base_ratio = np.random.uniform(lower_bound, upper_bound)
         randomized_base_mass = random_base_ratio * np.array(base_mass)
         minitaur.SetBaseMasses(randomized_base_mass)
         return randomized_base_mass
     
-    def _randomize_leg_mass(self, minitaur, lower_bound, upper_bound):
+    def _randomize_leg_mass(self, minitaur, lower_bound, upper_bound): # array
         leg_masses = minitaur.GetLegMassesFromURDF()
         random_leg_ratio = np.random.uniform(lower_bound, upper_bound)
         randomized_leg_masses = random_leg_ratio * np.array(leg_masses)
         minitaur.SetLegMasses(randomized_leg_masses)
         return randomized_leg_masses 
 
-    def _randomize_inertia(self, minitaur, lower_bound, upper_bound):
+    def _randomize_inertia(self, minitaur, lower_bound, upper_bound): # array
         base_inertia = minitaur.GetBaseInertiasFromURDF()
         random_base_ratio = np.random.uniform(lower_bound, upper_bound)
         randomized_base_inertia = random_base_ratio * np.array(base_inertia)
         minitaur.SetBaseInertias(randomized_base_inertia)       
         return randomized_base_inertia
     
-    def _randomize_leg_inertia(self, minitaur, lower_bound, upper_bound):
+    def _randomize_leg_inertia(self, minitaur, lower_bound, upper_bound): # array
         leg_inertia = minitaur.GetLegInertiasFromURDF()
         random_leg_ratio = np.random.uniform(lower_bound, upper_bound)
         randomized_leg_inertia = random_leg_ratio * np.array(leg_inertia)
         minitaur.SetLegInertias(randomized_leg_inertia)
         return randomized_leg_inertia
     
-    def _randomize_latency(self, minitaur, lower_bound, upper_bound):
-        randomized_latency = np.random.uniform(lower_bound, upper_bound)
+    def _randomize_latency(self, minitaur, lower_bound, upper_bound): # float
+        randomized_latency = random.uniform(lower_bound, upper_bound)
         minitaur.SetControlLatency(randomized_latency)
         return randomized_latency
     
-    def _randomize_joint_friction(self, minitaur, lower_bound, upper_bound):
+    def _randomize_joint_friction(self, minitaur, lower_bound, upper_bound): # array
         num_knee_joints = minitaur.GetNumKneeJoints()
         randomized_joint_frictions = np.random.uniform([lower_bound] * num_knee_joints,
                                                     [upper_bound] * num_knee_joints)
         minitaur.SetJointFriction(randomized_joint_frictions)
         return randomized_joint_frictions
     
-    def _randomize_motor_friction(self, minitaur, lower_bound, upper_bound):
+    def _randomize_motor_friction(self, minitaur, lower_bound, upper_bound): # float
         randomized_motor_damping = np.random.uniform(lower_bound, upper_bound)
         minitaur.SetMotorViscousDamping(randomized_motor_damping)
         return randomized_motor_damping
     
-    def _randomize_contact_restitution(self, minitaur, lower_bound, upper_bound):
-        randomized_restitution = np.random.uniform(lower_bound, upper_bound)
+    def _randomize_contact_restitution(self, minitaur, lower_bound, upper_bound): # 
+        randomized_restitution = random.uniform(lower_bound, upper_bound)
         minitaur.SetFootRestitution(randomized_restitution)
         return randomized_restitution
 
-    def _randomize_contact_friction(self, minitaur, lower_bound, upper_bound):
+    def _randomize_contact_friction(self, minitaur, lower_bound, upper_bound): # lateral float
         randomized_foot_friction = np.random.uniform(lower_bound, upper_bound)
         minitaur.SetFootFriction(randomized_foot_friction)
         return randomized_foot_friction
     
-    def _randomize_battery_level(self, minitaur, lower_bound, upper_bound):
+    def _randomize_battery_level(self, minitaur, lower_bound, upper_bound):  # float 
         randomized_battery_voltage = np.random.uniform(lower_bound, upper_bound)
         minitaur.SetBatteryVoltage(randomized_battery_voltage)
         return randomized_battery_voltage
     
-    def _randomize_motor_strength(self, minitaur, lower_bound, upper_bound):
+    def _randomize_motor_strength(self, minitaur, lower_bound, upper_bound): # array
         randomized_motor_strength_ratios = np.random.uniform([lower_bound] * minitaur.num_motors,
                                                             [upper_bound] * minitaur.num_motors)
         minitaur.SetMotorStrengthRatios(randomized_motor_strength_ratios)
@@ -175,12 +175,13 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
 class StaticEnvRandomizer(MinitaurEnvRandomizer):
     def __init__(self):
         self.randomization_param_dict = all_params()
+        self.param_dict = {}
         self.step = 0
     def randomize_env(self, env):
         if self.step == 0:
             self._randomization_function_dict = self._build_randomization_function_dict(env)
             for param_name, random_range in iter(self.randomization_param_dict.items()):
-                self._randomization_function_dict[param_name](lower_bound=random_range[0],
+                self.param_dict[param_name] = self._randomization_function_dict[param_name](lower_bound=random_range[0],
                                                             upper_bound=random_range[1])
             self.step += 1
     def randomize_step(self, env):
@@ -220,7 +221,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         self.env = env
         self.agent = agent
         self.param_elems, self.param_shape = self._get_params()
-        self.param_mean = []
+        self.param_mean = [self.param_elems]
 
         frame, obs = get_frame_captures(env, env.action_space.sample())       
         self.SPM = SimParamModel(shape=len(self.param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=2, units=400, device=torch.device('cuda'), obs_shape=frame[0].shape, 
@@ -229,11 +230,13 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
     def _get_params(self):
         param_shape = OrderedDict()
         param_elem = []
+                
         for param_name, param_obj in self.param_dict.items():
             if isinstance(param_obj, np.ndarray):
-                param_shape[param_name] = param_obj.shape
-                self.param_dict[param_name] = param_obj.flatten()
-                param_elem += param_obj.flatten().tolist()
+                param_shape[param_name] = 1
+                param_elem.append(param_obj.mean())
+                # self.param_dict[param_name] = param_obj.flatten()
+                # param_elem += param_obj.flatten().tolist()
             else:
                 param_shape[param_name] = 1
                 param_elem.append(param_obj)
@@ -281,7 +284,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
 
 
 
-    def update_params(self, real_env, alpha=0.1):
+    def update_params(self, real_env, real_env_randomizer=None, alpha=0.1):
         self.env
         self.agent
 
@@ -342,16 +345,23 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         # random_base_ratio = random.uniform(0.8 * new_mean[0], 1.2 * new_mean[0])
         # random_base_ratio1 = random.uniform(0.8 * new_mean[1], 1.2 * new_mean[1])
         # random_base_ratio2 = random.uniform(0.8 * new_mean[2], 1.2 * new_mean[2])
-
-       
+        if real_env_randomizer != None:
+            real_param_dict = real_env_randomizer.param_dict.items()
+            print(real_param_dict)
         _param= {}
         counter = 0
         for elem, shape in self.param_shape.items():
-            new_counter = np.prod(shape) + counter
-            _param[elem] = new_mean[counter:new_counter].reshape(shape)
+            count = np.prod(shape) 
+            new_counter = count + counter
+
+            if count == 1:
+                _param[elem] = new_mean[counter:new_counter][0]
+            else:
+                _param[elem] = new_mean[counter:new_counter].reshape(shape)
             counter = new_counter
 
-        print(list(self.param_dict.items()))
+        # print(list(self.param_dict.items()))
+
 
 
         param_dict = {}
@@ -360,8 +370,9 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
             try:
                 param_dict[param_name] = self._randomization_function_dict[param_name](lower_bound=random_range[0] * _param[param_name],
                                                         upper_bound=random_range[1] * _param[param_name])
+                # pass
             except Exception as E:
                 param_dict[param_name] = self._randomization_function_dict[param_name](lower_bound=random_range[0], upper_bound=random_range[1])
                 print(E)
-        print(list(param_dict.items()))
+        # print(list(param_dict.items()))
         return 

@@ -93,7 +93,7 @@ def main_1():
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
         sim_param_model.spm_train()
-        sim_param_model.update_params(real_environment)
+        sim_param_model.update_params(real_environment, static_environment_randomizer)
         # EVALUATE PARAMS AGAINST REAL WORLD OBSERVATIONS
         # evaluate(real_env, sim_env, agent, sim_param_model, video_real, video_sim,
         #              args.num_eval_episodes, L, step, args, use_policy, update_distribution, training_phase)
