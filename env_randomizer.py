@@ -324,7 +324,8 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         for i in range(len(frames)):
             x.append([frames[i], obs[i], actions[i]])
 
-        self.SPM.update(x, self.param_elems, self.distribution_mean)
+        loss = self.SPM.update(x, self.param_elems, self.distribution_mean)
+        return loss
 
     def randomize_env(self, env):    
         super(SimPramRandomizer, self).randomize_env(env)

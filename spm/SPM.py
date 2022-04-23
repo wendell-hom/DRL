@@ -524,13 +524,13 @@ class SimParamModel(nn.Module):
             loss = torch.nn.MSELoss()(self.forward([obs_list]), torch.FloatTensor(sim_params).to(self.device))
             self.sim_param_optimizer.zero_grad()
             loss.backward()
-            print("loss", loss.cpu().item())
             self.sim_param_optimizer.step()
         else:
             loss, log_params = self.train_classifier(obs_list, sim_params, dist_mean)
             self.sim_param_optimizer.zero_grad()
             loss.backward()
             self.sim_param_optimizer.step()
+        return loss.cpu().item()
 
     def save(self, model_dir, step):
         torch.save(
