@@ -298,8 +298,8 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         self.param_mean = []
 
         frame, obs = get_frame_captures(env, env.action_space.sample())       
-        self.SPM = SimParamModel(shape=len(self.param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=2, units=400, device=torch.device('cuda'), obs_shape=frame[0].shape, 
-            encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size )
+        self.SPM = SimParamModel(shape=len(self.param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=4, units=400, device=torch.device('cuda'), obs_shape=frame[0].shape, 
+            encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size, normalize_features=True, clip_positive=True,  )
 
     def _get_params(self):
         param_shape = OrderedDict()

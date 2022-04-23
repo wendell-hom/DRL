@@ -108,20 +108,22 @@ def main_1():
         print(".", end='')
         sim_param_model.randomize_env(sim_environment)
         actions = [sim_environment.action_space.sample() for _ in range(256)]
-        loss = sim_param_model.spm_train(actions)
-        spm_loss.append(loss)
+        for _ in range(30):
+            loss = sim_param_model.spm_train(actions)
+            spm_loss.append(loss)
 
     print("Done with pre-training")
 
     spm_loss = []
     # FOR 1: K  
     fp = open("error.txt", "w")
-    for _ in range(100):
+    for _ in range(10):
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
-        spm_loss += [sim_param_model.spm_train(model.rollout_buffer.actions)]
+        for _ in range(10):
+            spm_loss += [sim_param_model.spm_train(model.rollout_buffer.actions)]
         sim_param_model.update_params(real_environment)
-
+        
         # Check difference between mean of simulation parameters vs. parameters of real environment
         distance = parameter_error(sim_param_model, static_environment_randomizer)
         print(f"Distance: {distance}")
