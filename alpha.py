@@ -35,6 +35,22 @@ def get_frame_captures(env, actions):
 
 
 
+def parameter_error(sim_param_model, static_env_randomizer):
+
+    error = dict()
+
+    for param_name, param_obj in sim_param_model.param_dict.items():
+        real_params = static_env_randomizer.param_dict[param_name][0]
+        sim_param_means = (param_obj[1] + param_obj[2])/2
+        if not np.isscalar(real_params):
+            assert(real_params.shape == sim_param_means.shape)
+        else:
+            assert(np.isscalar(sim_param_means))
+
+        error[param_name] = np.linalg.norm(real_params - sim_param_means)
+
+    return error
+
 def main_1():
 
     static_environment_randomizer = StaticEnvRandomizer()
@@ -70,8 +86,6 @@ def main_1():
     
 
 
-
-
     # Where to save the model
     output_dir = "models_SPM_t1"
     save_path = os.path.join(output_dir, "model")
@@ -88,22 +102,33 @@ def main_1():
     sim_param_model = SimPramRandomizer(sim_environment, model, batch_size)
     sim_environment.add_env_randomizer(sim_param_model)
     spm_loss = []
+
     #init spm
-    for _ in range(10):
+    for _ in range(20):
+        print(".", end='')
         sim_param_model.randomize_env(sim_environment)
         actions = [sim_environment.action_space.sample() for _ in range(256)]
         loss = sim_param_model.spm_train(actions)
         spm_loss.append(loss)
 
+    print("Done with pre-training")
+
     spm_loss = []
     # FOR 1: K  
-    for _ in range(10):
+    fp = open("error.txt", "w")
+    for _ in range(100):
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
         spm_loss += [sim_param_model.spm_train(model.rollout_buffer.actions)]
         sim_param_model.update_params(real_environment)
-        
+
+        # Check difference between mean of simulation parameters vs. parameters of real environment
+        distance = parameter_error(sim_param_model, static_environment_randomizer)
+        print(f"Distance: {distance}")
+        fp.write(f"Distance: {distance} \n")
+
     
+
 
 
 

@@ -254,7 +254,7 @@ class StaticEnvRandomizer(MinitaurEnvRandomizer):
         if self.step == 0:
             self._randomization_function_dict = self._build_randomization_function_dict(env)
             for param_name, random_range in iter(self.randomization_param_dict.items()):
-                self._randomization_function_dict[param_name](lower_bound=random_range[0],
+                self.param_dict[param_name] = self._randomization_function_dict[param_name](lower_bound=random_range[0],
                                                             upper_bound=random_range[1])
             self.step += 1
     def randomize_step(self, env):
@@ -416,6 +416,8 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
             # At least some parameters must be non-negative
             lb = np.fmax(lb + param_updates, 0)
             ub = np.fmax(ub + param_updates, 0)
+
+            self.param_dict[param_name] = (param_vals, lb, ub)
 
             # For debugging, report any changes to parameters if parameters whose shape isn't too large
             if np.any(param_updates) and lb.size < 10:
