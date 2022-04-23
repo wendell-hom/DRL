@@ -317,11 +317,9 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         return param_elem, param_shape
 
 
-    def spm_train(self):
-        self.SPM.train()        
-        actions = self.agent.rollout_buffer.actions
+    def spm_train(self, actions):
+        self.SPM.train() 
         frames, obs = get_frame_captures(self.env, actions)
-
         x = []
         for i in range(len(frames)):
             x.append([frames[i], obs[i], actions[i]])

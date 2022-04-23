@@ -88,39 +88,21 @@ def main_1():
     sim_param_model = SimPramRandomizer(sim_environment, model, batch_size)
     sim_environment.add_env_randomizer(sim_param_model)
     
+    #init spm
+    for _ in range(10):
+        sim_param_model.randomize_env(sim_environment)
+        actions = [sim_environment.action_space.sample() for _ in range(256)]
+        sim_param_model.spm_train(actions)
+
+
+
     # FOR 1: K
     for _ in range(10):
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
-        sim_param_model.spm_train()
-        sim_param_model.update_params(real_environment, static_environment_randomizer)
-        # EVALUATE PARAMS AGAINST REAL WORLD OBSERVATIONS
-        # evaluate(real_env, sim_env, agent, sim_param_model, video_real, video_sim,
-        #              args.num_eval_episodes, L, step, args, use_policy, update_distribution, training_phase)
-
-        # collect rollouts using PPO model running on real world env, i.e., collect real world trajectories.
-        # potentially 3 episodes 
-
-        # for each episode, we call update_sim_params to figure which parameters (129) should be updated.
-        # values of 0 from forward_classifier, should be decremented, values of 0.5 leave it alone, values of 1 increment
-
-        # pred_sim_params is a list of 3 items, but we take mean so it becomes a list of len = number of parameters (129)
+        sim_param_model.spm_train(model.rollout_buffer.actions)
+        sim_param_model.update_params(real_environment)
         
-        # Loop through all parameters,
-        # figure out current simulation mean value
-        # figure out new updated mean based on 
-        #     scale_factor = max(prev_mean, args.alpha)
-        #     new_update = - alpha * (np.mean(pred_mean) - 0.5) * scale_factor
-        #     curr_update = args.momentum * args.update[i] + (1 - args.momentum) * new_update
-        #     new_mean = prev_mean + curr_update
-        # new_mean = max(new_mean, 1e-3)
-        # sim_env.dr[param] = new_mean
-
-
-        
-
-    # model.learn(total_timesteps=2e6, callback=callbacks, eval_env=real_environment)
-
 
 
 
