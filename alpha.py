@@ -87,23 +87,23 @@ def main_1():
 
     sim_param_model = SimPramRandomizer(sim_environment, model, batch_size)
     sim_environment.add_env_randomizer(sim_param_model)
-    
+    spm_loss = []
     #init spm
     for _ in range(10):
         sim_param_model.randomize_env(sim_environment)
         actions = [sim_environment.action_space.sample() for _ in range(256)]
-        sim_param_model.spm_train(actions)
+        loss = sim_param_model.spm_train(actions)
+        spm_loss.append(loss)
 
-
-
-    # FOR 1: K
+    spm_loss = []
+    # FOR 1: K  
     for _ in range(10):
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
-        sim_param_model.spm_train(model.rollout_buffer.actions)
+        spm_loss += [sim_param_model.spm_train(model.rollout_buffer.actions)]
         sim_param_model.update_params(real_environment)
         
-
+    
 
 
 
