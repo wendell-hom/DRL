@@ -317,13 +317,22 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         return param_elem, param_shape
 
 
-    def spm_train(self, actions):
-        self.SPM.train() 
-        frames, obs = get_frame_captures(self.env, actions)
-        x = []
-        for i in range(len(frames)):
-            x.append([frames[i], obs[i], actions[i]])
+    def collect_rollout(self, n_steps = 1000):
+        obs = self.env.reset() 
 
+        traj = []
+        for i in range(n_steps):
+            action, state = self.agent.predict(obs)
+            obs, _, _, _ = self.env.step(action)
+            traj.append([[], obs, action])
+
+        return traj
+
+    def spm_train(self):
+
+        x = self.collect_rollout()
+
+        self.SPM.train() 
         loss = self.SPM.update(x, self.param_elems, self.distribution_mean)
         return loss
 
@@ -376,17 +385,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
 
         actions = []
 
-        for i in range(0, 10):
-            action, state = self.agent.predict(obs)
-            obs, _, _, _ = real_env.step(action)
-            actions.append(action)
-
-        traj = []
-        frames, obs = get_frame_captures(real_env, actions)
-        traj = []
-        for i in range(len(frames)):
-            traj.append([frames[i], obs[i], actions[i]])
-
+        traj = self.collect_rollout()
 
         full_traj = [traj]
         with torch.no_grad():

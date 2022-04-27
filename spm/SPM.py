@@ -233,7 +233,7 @@ class SimParamModel(nn.Module):
                  encoder_feature_dim, encoder_num_layers, encoder_num_filters, sim_param_lr=1e-3,
                  sim_param_beta=0.9,
                  dist='binary', act=nn.ELU, batch_size=32, traj_length=200, num_frames=10,
-                 embedding_multires=10, use_img=True, state_dim=0, separate_trunks=False, param_names=[],
+                 embedding_multires=10, use_img=False, state_dim=0, separate_trunks=False, param_names=[],
                  train_range_scale=1, prop_train_range_scale=False, clip_positive=False, dropout=0.5,
                  initial_range=None, single_window=False, share_encoder=False, normalize_features=False,
                  use_layer_norm=False, use_weight_init=False, frame_skip=1, spatial_softmax=False):
@@ -380,6 +380,9 @@ class SimParamModel(nn.Module):
 
             obs_traj = obs_traj[::self.frame_skip]
             state_traj = state_traj[::self.frame_skip]
+            state_traj = torch.Tensor(state_traj).to(self.device)
+            action_traj = torch.Tensor(action_traj).to(self.device)
+
             full_state_traj.append(torch.cat(state_traj))
             full_action_traj.append(torch.cat(action_traj))
             # If we're using images, only use the first of the stacked frames
@@ -430,6 +433,10 @@ class SimParamModel(nn.Module):
 
             obs_traj = obs_traj[::self.frame_skip]
             state_traj = state_traj[::self.frame_skip]
+
+            state_traj = tuple(torch.Tensor(state).to(self.device) for state in state_traj)
+            action_traj = tuple(torch.Tensor(action).to(self.device) for action in action_traj)
+
             full_state_traj.append(torch.cat(state_traj))
             full_action_traj.append(torch.cat(action_traj))
             # If we're using images, only use the first of the stacked frames

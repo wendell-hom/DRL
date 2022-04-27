@@ -38,6 +38,7 @@ def get_frame_captures(env, actions):
 def parameter_error(sim_param_model, static_env_randomizer):
 
     error = dict()
+    total = 0
 
     for param_name, param_obj in sim_param_model.param_dict.items():
         real_params = static_env_randomizer.param_dict[param_name][0]
@@ -48,8 +49,9 @@ def parameter_error(sim_param_model, static_env_randomizer):
             assert(np.isscalar(sim_param_means))
 
         error[param_name] = np.linalg.norm(real_params - sim_param_means)
+        total += error[param_name]
 
-    return error
+    return error, total
 
 def main_1():
 
@@ -95,39 +97,46 @@ def main_1():
     callbacks = []
     callbacks.append(CheckpointCallback(save_freq=int(1e5), save_path=save_path, name_prefix='SPM_t1'))
 
-    model = PPO("MlpPolicy", sim_environment, verbose=1, n_steps=256, 
-                batch_size=batch_size, gae_lambda=0.95, gamma=0.99, n_epochs=1, ent_coef=0.0, 
-                learning_rate=2.5e-4, clip_range=0.2, device='cuda')
+    model = PPO("MlpPolicy", sim_environment, verbose=1, n_steps=1000, 
+                batch_size=batch_size, gae_lambda=0.95, gamma=0.99, n_epochs=10, ent_coef=0.0, 
+                learning_rate=2.5e-4, clip_range=0.2, device='cuda', tensorboard_log=log_path)
 
     sim_param_model = SimPramRandomizer(sim_environment, model, batch_size)
     sim_environment.add_env_randomizer(sim_param_model)
     spm_loss = []
 
     #init spm
-    for _ in range(20):
-        print(".", end='')
-        sim_param_model.randomize_env(sim_environment)
-        actions = [sim_environment.action_space.sample() for _ in range(256)]
-        for _ in range(30):
-            loss = sim_param_model.spm_train(actions)
-            spm_loss.append(loss)
+    # for _ in range(20):
+    #     print(".", end='')
+    #     sim_param_model.randomize_env(sim_environment)
+    #     actions = [sim_environment.action_space.sample() for _ in range(256)]
+    #     for _ in range(30):
+    #         loss = sim_param_model.spm_train(actions)
+    #         spm_loss.append(loss)
 
     print("Done with pre-training")
 
     spm_loss = []
     # FOR 1: K  
     fp = open("error.txt", "w")
-    for _ in range(10):
+    for _ in range(1000):
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
         model.learn(total_timesteps=1e2, callback=callbacks)
+
+        # Train the SPM model
         for _ in range(10):
-            spm_loss += [sim_param_model.spm_train(model.rollout_buffer.actions)]
-        sim_param_model.update_params(real_environment)
+            spm_loss.append(sim_param_model.spm_train())
+
+        # Do real world rollouts to update simulation parameters
+        for _ in range(3):
+            sim_param_model.update_params(real_environment)
         
         # Check difference between mean of simulation parameters vs. parameters of real environment
-        distance = parameter_error(sim_param_model, static_environment_randomizer)
-        print(f"Distance: {distance}")
-        fp.write(f"Distance: {distance} \n")
+        distance, total = parameter_error(sim_param_model, static_environment_randomizer)
+        print(f"Total error: {total}")
+        print(f"Individual error: {distance}")
+        fp.write(f"Total error: {total} \n")
+        fp.write(f"Individual error: {distance} \n")
 
     
 
