@@ -1,6 +1,7 @@
 import time
 import argparse
 import os, inspect
+from tqdm import tqdm, trange
 
 
 currentdir = os.getcwd() #os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -97,7 +98,7 @@ def main_1():
     callbacks = []
     callbacks.append(CheckpointCallback(save_freq=int(1e5), save_path=save_path, name_prefix='SPM_t1'))
 
-    model = PPO("MlpPolicy", sim_environment, verbose=1, n_steps=1000, 
+    model = PPO("MlpPolicy", sim_environment, verbose=1, n_steps=500, 
                 batch_size=batch_size, gae_lambda=0.95, gamma=0.99, n_epochs=10, ent_coef=0.0, 
                 learning_rate=2.5e-4, clip_range=0.2, device='cuda', tensorboard_log=log_path)
 
@@ -106,30 +107,40 @@ def main_1():
     spm_loss = []
 
     #init spm
-    # for _ in range(20):
+    # for _ in range(50):
     #     print(".", end='')
-    #     sim_param_model.randomize_env(sim_environment)
-    #     actions = [sim_environment.action_space.sample() for _ in range(256)]
-    #     for _ in range(30):
-    #         loss = sim_param_model.spm_train(actions)
-    #         spm_loss.append(loss)
+    #     loss = sim_param_model.spm_train()
 
     print("Done with pre-training")
 
     spm_loss = []
     # FOR 1: K  
-    fp = open("error.txt", "w")
+    fp = open("log.txt", "w")
+
     for _ in range(1000):
+
         #TRAIN RL AGENT AND THE SPM MODEL AGAINST THE ENVIORNMENT PARAMETERS
-        model.learn(total_timesteps=1e2, callback=callbacks)
+        model.learn(total_timesteps=1e5, callback=callbacks)
+
+		# Evaluate in real environment after training
+        rewards, falls = sim2sim(model, real_environment)
+        print(f"Rewards, falls: {rewards}, {falls}")
+        fp.write(f"Rewards, falls: {rewards}, {falls}")
 
         # Train the SPM model
-        for _ in range(10):
-            spm_loss.append(sim_param_model.spm_train())
+        with trange(25) as t:
+            for i in t:
+                loss, acc = sim_param_model.spm_train()
+                spm_loss.append(loss)
+                dev_loss, dev_acc = sim_param_model.evaluate_spm(real_environment)
+                t.set_postfix(acc=acc, loss=loss, dev_loss=dev_loss, dev_acc=dev_acc )
+                fp.write(f"Accuracy, loss: {loss}, {acc}, {dev_loss}, {dev_acc}\n")
+                print(f"Accuracy, loss: {loss}, {acc}, {dev_loss}, {dev_acc}")
 
         # Do real world rollouts to update simulation parameters
         for _ in range(3):
             sim_param_model.update_params(real_environment)
+
         
         # Check difference between mean of simulation parameters vs. parameters of real environment
         distance, total = parameter_error(sim_param_model, static_environment_randomizer)
@@ -139,8 +150,32 @@ def main_1():
         fp.write(f"Individual error: {distance} \n")
 
     
+def sim2sim(model, environment, episodes=10, steps=500):
+    rewards = []
+    fallen = []
 
+    for _ in range(episodes):
+        sum_reward = 0
+        has_fallen = 0
+        observation = environment.reset()
 
+        for _ in range(steps):
+            # Sleep to prevent serial buffer overflow on microcontroller.
+            time.sleep(0.002)
+            action, _states = model.predict(observation)
+            observation, reward, done, _ = environment.step(action)
+
+            # Seems like minitaur always falls during my runs, need to debug to see why  
+            if environment.is_fallen():
+                has_fallen = 1
+
+            sum_reward += reward
+            if done:
+                break
+        rewards.append(sum_reward)
+        fallen.append(has_fallen)
+
+    return np.mean(rewards), np.sum(fallen)
 
 
 

@@ -14,6 +14,7 @@ import matplotlib.image as mpimg
 import cv2
 
 import torch
+import torch.nn as nn
 
 from spm.SPM import SimParamModel
 currentdir = os.getcwd() #os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -82,6 +83,19 @@ class MinitaurEnvRandomizer(EnvRandomizerBase):
                                                   upper_bound=random_range[1])
         
         #return param_dict
+    @property
+    def distribution_mean(self):
+        param_mean_elems = []
+        for param_name, param_obj in self.param_dict.items():
+            _, lb, ub = param_obj
+            mean = (lb + ub)/2
+
+            if np.isscalar(mean):
+                param_mean_elems.append(mean)
+            else:
+                param_mean_elems.extend( mean.flatten() )
+
+        return np.array(param_mean_elems)
 
 
     def _build_randomization_function_dict(self, env):
@@ -298,7 +312,7 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         self.param_mean = []
 
         frame, obs = get_frame_captures(env, env.action_space.sample())       
-        self.SPM = SimParamModel(shape=len(self.param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=4, units=400, device=torch.device('cuda'), obs_shape=frame[0].shape, 
+        self.SPM = SimParamModel(shape=len(self.param_elems), action_space=env.action_space, state_dim=obs[0].size, layers=2, units=50, device=torch.device('cuda'), obs_shape=frame[0].shape, 
             encoder_type='pixel', encoder_feature_dim=50, encoder_num_layers=4, encoder_num_filters=32, batch_size=batch_size, normalize_features=True, clip_positive=True,  )
 
     def _get_params(self):
@@ -333,8 +347,8 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
         x = self.collect_rollout()
 
         self.SPM.train() 
-        loss = self.SPM.update(x, self.param_elems, self.distribution_mean)
-        return loss
+        loss, acc = self.SPM.update(x, self.param_elems, self.distribution_mean)
+        return loss, acc
 
     def randomize_env(self, env):    
         super(SimPramRandomizer, self).randomize_env(env)
@@ -355,27 +369,27 @@ class SimPramRandomizer(MinitaurEnvRandomizer):
                 param_mean_elems.extend( mean.flatten() )
 
         return np.array(param_mean_elems)
-        # if len(self.param_mean) == 0:
-        #     param_mean_elems = {}
-        #     for param_name, elem in self.randomization_param_dict.items():
-        #         param_mean_elems[param_name]  = (elem[0] + elem[1]) / 2
-
-        #     param_dist = []
-        #     for elem, shape in self.param_shape.items():
-        #         count = np.prod(shape)
-        #         param_dist += [param_mean_elems[elem]] * count
-        #     return np.asarray(param_dist)
-        # else:
-        #     return self.param_mean[-1]
-
-    # def set_param_distribution(self, elem_classification):
-    #     param_mean_elems = self.distribution_mean
-    #     for i, (param_name, elem) in enumerate(self.randomization_param_dict.items()):
-    #         idx = elem_classification[i]
-    #         self.randomization_param_dict[param_name][idx] = param_mean_elems[i]
-    #     return param_mean_elems
 
 
+
+    def evaluate_spm(self, real_env):
+
+        traj = self.collect_rollout()
+        full_traj = [traj]
+
+        with torch.no_grad():
+            pred_class = self.SPM.forward_classifier(full_traj, [self.param_elems])
+
+            pred_class_flat = pred_class.flatten().unsqueeze(0).detach().cpu()
+
+            real_params = real_env._env_randomizers[0].distribution_mean
+            ground_truth = self.param_elems > real_params
+            ground_truth = torch.Tensor(ground_truth.reshape(1, -1))
+
+            loss = nn.BCELoss()(pred_class_flat, ground_truth).detach().cpu().item()
+            accuracy = np.mean((torch.round(pred_class_flat) == ground_truth).float().detach().cpu().numpy())
+
+        return loss, accuracy
 
     def update_params(self, real_env, alpha=0.1):
         self.env

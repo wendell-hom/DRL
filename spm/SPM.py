@@ -235,7 +235,7 @@ class SimParamModel(nn.Module):
                  dist='binary', act=nn.ELU, batch_size=32, traj_length=200, num_frames=10,
                  embedding_multires=10, use_img=False, state_dim=0, separate_trunks=False, param_names=[],
                  train_range_scale=1, prop_train_range_scale=False, clip_positive=False, dropout=0.5,
-                 initial_range=None, single_window=False, share_encoder=False, normalize_features=False,
+                 initial_range=None, single_window=False, share_encoder=False, normalize_features=True,
                  use_layer_norm=False, use_weight_init=False, frame_skip=1, spatial_softmax=False):
         super(SimParamModel, self).__init__()
         self._shape = shape
@@ -520,10 +520,11 @@ class SimParamModel(nn.Module):
         loss = nn.BCELoss()(pred_class_flat, labels_flat)
 
         full_loss = nn.BCELoss(reduction='none')(pred_class.float(), labels.float()).detach().cpu().numpy()
-        accuracy = (torch.round(pred_class) == labels).float().detach().cpu().numpy()
+        accuracy = np.mean((torch.round(pred_class) == labels).float().detach().cpu().numpy())
         error = (pred_class - labels).float().detach().cpu().numpy()
 
-        return loss, (full_loss, accuracy, error, self.feature_norm.detach().cpu().numpy())
+        #return loss, (full_loss, accuracy, error, self.feature_norm.detach().cpu().numpy())
+        return loss, accuracy
 
 
     def update(self, obs_list, sim_params, dist_mean):
@@ -532,12 +533,14 @@ class SimParamModel(nn.Module):
             self.sim_param_optimizer.zero_grad()
             loss.backward()
             self.sim_param_optimizer.step()
+            return loss.cpu().item()
         else:
-            loss, log_params = self.train_classifier(obs_list, sim_params, dist_mean)
+            loss, accuracy = self.train_classifier(obs_list, sim_params, dist_mean)
             self.sim_param_optimizer.zero_grad()
             loss.backward()
             self.sim_param_optimizer.step()
-        return loss.cpu().item()
+            return loss.cpu().item(), accuracy
+            
 
     def save(self, model_dir, step):
         torch.save(
